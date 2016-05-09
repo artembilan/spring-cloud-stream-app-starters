@@ -19,7 +19,6 @@
 		<dependency>
 			<groupId>org.springframework.cloud.stream.app</groupId>
 			<artifactId>app-starters-file-common</artifactId>
-			<version>1.0.0.BUILD-SNAPSHOT</version>
 		</dependency>
 	</dependencies>
 
