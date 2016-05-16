@@ -23,7 +23,6 @@ import javax.mail.URLName;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.cloud.stream.annotation.Bindings;
 import org.springframework.cloud.stream.annotation.EnableBinding;
 import org.springframework.cloud.stream.app.trigger.TriggerConfiguration;
 import org.springframework.cloud.stream.messaging.Source;
@@ -43,6 +42,7 @@ import org.springframework.integration.scheduling.PollerMetadata;
  * A source module that listens for mail and emits the content as a message payload.
  *
  * @author Amol
+ * @author Artem Bilan
  */
 @EnableBinding(Source.class)
 @EnableConfigurationProperties({ MailSourceProperties.class })
@@ -51,23 +51,16 @@ public class MailSourceConfiguration {
 
 	@Autowired
 	@Qualifier("defaultPoller")
-	PollerMetadata defaultPoller;
+	private PollerMetadata defaultPoller;
 
 	@Autowired
-	@Bindings(MailSourceConfiguration.class)
-	Source source;
-
-	@Autowired
-	MailSourceProperties properties;
+	private MailSourceProperties properties;
 
 	@Bean
 	public IntegrationFlow mailInboundFlow() {
-
-		IntegrationFlowBuilder flowBuilder;
-
-		flowBuilder = getFlowBuilder();
-
-		return flowBuilder.transform(Transformers.fromMail()).channel(source.output())
+		return getFlowBuilder()
+				.transform(Transformers.fromMail(this.properties.getCharset()))
+				.channel(Source.OUTPUT)
 				.get();
 	}
 
@@ -80,30 +73,26 @@ public class MailSourceConfiguration {
 	private IntegrationFlowBuilder getFlowBuilder() {
 
 		IntegrationFlowBuilder flowBuilder;
-		URLName urlName;
-		if (null != this.properties.getMailUrl()) {
-			urlName = new URLName(this.properties.getMailUrl());
-		}
-		else {
-			urlName = null;
-		}
+		URLName urlName = this.properties.getMailUrl();
+
 		if (this.properties.isIdleImap()) {
-			flowBuilder = getIdleImapflow(urlName);
+			flowBuilder = getIdleImapFlow(urlName);
 		}
 		else {
 
 			MailInboundChannelAdapterSpec adapterSpec;
 			switch (urlName.getProtocol().toUpperCase()) {
-			case "IMAP":
-			case "IMAPS":
-				adapterSpec = getImapFlowBuilder(urlName);
-				break;
-			case "POP3":
-				adapterSpec = getPop3FlowBuilder(urlName);
-				break;
-			default:
-				throw new IllegalArgumentException(
-						"Unsupported mail protocol: " + urlName.getProtocol());
+				case "IMAP":
+				case "IMAPS":
+					adapterSpec = getImapFlowBuilder(urlName);
+					break;
+				case "POP3":
+				case "POP3S":
+					adapterSpec = getPop3FlowBuilder(urlName);
+					break;
+				default:
+					throw new IllegalArgumentException(
+							"Unsupported mail protocol: " + urlName.getProtocol());
 			}
 			flowBuilder = IntegrationFlows.from(
 					adapterSpec.javaMailProperties(getJavaMailProperties(urlName))
@@ -114,8 +103,9 @@ public class MailSourceConfiguration {
 						@Override
 						public void accept(
 								SourcePollingChannelAdapterSpec sourcePollingChannelAdapterSpec) {
-							sourcePollingChannelAdapterSpec.poller(defaultPoller);
+							sourcePollingChannelAdapterSpec.poller(MailSourceConfiguration.this.defaultPoller);
 						}
+
 					});
 
 		}
@@ -127,15 +117,12 @@ public class MailSourceConfiguration {
 	 * @param urlName Mail source URL.
 	 * @return Integration Flow object IMAP IDLE.
 	 */
-	private IntegrationFlowBuilder getIdleImapflow(URLName urlName) {
-		IntegrationFlowBuilder flowBuilder = null;
-
-		flowBuilder = IntegrationFlows.from(Mail.imapIdleAdapter(urlName.toString())
+	private IntegrationFlowBuilder getIdleImapFlow(URLName urlName) {
+		return IntegrationFlows.from(Mail.imapIdleAdapter(urlName.toString())
 				.shouldDeleteMessages(this.properties.isDelete())
 				.javaMailProperties(getJavaMailProperties(urlName))
 				.selectorExpression(this.properties.getExpression())
 				.shouldMarkMessagesAsRead(this.properties.isMarkAsRead()));
-		return flowBuilder;
 	}
 
 	/**
@@ -159,41 +146,35 @@ public class MailSourceConfiguration {
 				.shouldMarkMessagesAsRead(this.properties.isMarkAsRead());
 	}
 
-	/**
-	 * Method to set default Javamail Properties for POP3 and IMAP
-	 * @param urlName
-	 * @return
-	 */
 	private Properties getJavaMailProperties(URLName urlName) {
 		Properties javaMailProperties = new Properties();
 
 		switch (urlName.getProtocol().toUpperCase()) {
-		case "IMAP":
-			javaMailProperties.setProperty("mail.imap.socketFactory.class",
-					"javax.net.SocketFactory");
-			javaMailProperties.setProperty("mail.imap.socketFactory.fallback", "false");
-			javaMailProperties.setProperty("mail.store.protocol", "imap");
+			case "IMAP":
+				javaMailProperties.setProperty("mail.imap.socketFactory.class", "javax.net.SocketFactory");
+				javaMailProperties.setProperty("mail.imap.socketFactory.fallback", "false");
+				javaMailProperties.setProperty("mail.store.protocol", "imap");
+				break;
 
-			break;
-		case "IMAPS":
-			javaMailProperties.setProperty("mail.imap.socketFactory.class",
-					"javax.net.ssl.SSLSocketFactory");
-			javaMailProperties.setProperty("mail.imap.socketFactory.fallback", "false");
-			javaMailProperties.setProperty("mail.store.protocol", "imaps");
-			break;
-		case "POP3":
-			javaMailProperties.setProperty("mail.pop3.socketFactory.class",
-					"javax.net.SocketFactory");
-			javaMailProperties.setProperty("mail.pop3.socketFactory.fallback", "false");
-			javaMailProperties.setProperty("mail.store.protocol", "pop3");
-			break;
-		case "POP3S":
-			javaMailProperties.setProperty("mail.pop3.socketFactory.class",
-					"javax.net.ssl.SSLSocketFactory");
-			javaMailProperties.setProperty("mail.pop3.socketFactory.fallback", "false");
-			javaMailProperties.setProperty("mail.store.protocol", "pop3s");
-			break;
+			case "IMAPS":
+				javaMailProperties.setProperty("mail.imap.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
+				javaMailProperties.setProperty("mail.imap.socketFactory.fallback", "false");
+				javaMailProperties.setProperty("mail.store.protocol", "imaps");
+				break;
+
+			case "POP3":
+				javaMailProperties.setProperty("mail.pop3.socketFactory.class", "javax.net.SocketFactory");
+				javaMailProperties.setProperty("mail.pop3.socketFactory.fallback", "false");
+				javaMailProperties.setProperty("mail.store.protocol", "pop3");
+				break;
+
+			case "POP3S":
+				javaMailProperties.setProperty("mail.pop3.socketFactory.class", "javax.net.ssl.SSLSocketFactory");
+				javaMailProperties.setProperty("mail.pop3.socketFactory.fallback", "false");
+				javaMailProperties.setProperty("mail.store.protocol", "pop3s");
+				break;
 		}
+
 		javaMailProperties.putAll(this.properties.getJavaMailProperties());
 		return javaMailProperties;
 	}

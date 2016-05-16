@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.cloud.stream.app.mail.source;
 
 import static org.junit.Assert.assertEquals;
@@ -27,6 +28,8 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+
+import org.springframework.beans.factory.BeanFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.test.IntegrationTest;
@@ -35,6 +38,8 @@ import org.springframework.boot.test.WebIntegrationTest;
 import org.springframework.cloud.stream.app.test.mail.PoorMansMailServer;
 import org.springframework.cloud.stream.messaging.Source;
 import org.springframework.cloud.stream.test.binder.MessageCollector;
+import org.springframework.integration.mail.transformer.MailToStringTransformer;
+import org.springframework.integration.test.util.TestUtils;
 import org.springframework.messaging.Message;
 import org.springframework.test.annotation.DirtiesContext;
 import org.springframework.test.context.TestPropertySource;
@@ -44,6 +49,7 @@ import org.springframework.test.context.junit4.SpringJUnit4ClassRunner;
  * Tests for Mail Source Configuration.
  *
  * @author Amol
+ * @author Artem Bilan
  */
 @RunWith(SpringJUnit4ClassRunner.class)
 @SpringApplicationConfiguration(classes = MailSourceConfigurationTests.MailSourceApplication.class)
@@ -61,6 +67,9 @@ public abstract class MailSourceConfigurationTests {
 
 	@Autowired
 	protected MailSourceProperties properties;
+
+	@Autowired
+	protected BeanFactory beanFactory;
 
 	private static PoorMansMailServer.MailServer MAIL_SERVER;
 
@@ -81,8 +90,7 @@ public abstract class MailSourceConfigurationTests {
 		MAIL_SERVER.stop();
 	}
 
-	@IntegrationTest({
-			"mail-url=imap://user:pw@localhost:${test.mail.server.port}/INBOX" })
+	@IntegrationTest({ "mail-url=imap://user:pw@localhost:${test.mail.server.port}/INBOX" })
 	public static class ImapPassTests extends MailSourceConfigurationTests {
 
 		@BeforeClass
@@ -93,8 +101,7 @@ public abstract class MailSourceConfigurationTests {
 		@Test
 		public void testSimpleTest() throws Exception {
 
-			Message<?> received = messageCollector.forChannel(source.output()).poll(10,
-					TimeUnit.SECONDS);
+			Message<?> received = this.messageCollector.forChannel(source.output()).poll(10, TimeUnit.SECONDS);
 			assertNotNull(received);
 			assertThat(received.getPayload(), Matchers.instanceOf(String.class));
 			assertEquals("foo\r\n", received.getPayload());
@@ -102,8 +109,7 @@ public abstract class MailSourceConfigurationTests {
 
 	}
 
-	@IntegrationTest({
-			"mail-url=imap://user:pw@localhost:${test.mail.server.port}/INBOX" })
+	@IntegrationTest({ "mail-url=imap://user:pw@localhost:${test.mail.server.port}/INBOX", "charset=cp1251"})
 	public static class ImapFailTests extends MailSourceConfigurationTests {
 
 		@BeforeClass
@@ -114,18 +120,20 @@ public abstract class MailSourceConfigurationTests {
 		@Test
 		public void testSimpleTest() throws Exception {
 
-			Message<?> received = messageCollector.forChannel(source.output()).poll(10,
-					TimeUnit.SECONDS);
+			Message<?> received = this.messageCollector.forChannel(source.output()).poll(10, TimeUnit.SECONDS);
 			assertNotNull(received);
 			assertThat(received.getPayload(), Matchers.instanceOf(String.class));
 			assertTrue(!received.getPayload().equals("Test Mail"));
+
+			MailToStringTransformer mailToStringTransformer = this.beanFactory.getBean(MailToStringTransformer.class);
+			assertEquals("cp1251", TestUtils.getPropertyValue(mailToStringTransformer, "charset"));
 		}
 
 	}
 
-	@IntegrationTest({
-			"mail-url=pop3://user:pw@localhost:${test.mail.server.port}/INBOX" })
+	@IntegrationTest({ "mail-url=pop3://user:pw@localhost:${test.mail.server.port}/INBOX" })
 	public static class Pop3PassTests extends MailSourceConfigurationTests {
+
 		@BeforeClass
 		public static void startImapServer() throws Throwable {
 			startMailServer(PoorMansMailServer.pop3(0));
@@ -134,8 +142,7 @@ public abstract class MailSourceConfigurationTests {
 		@Test
 		public void testSimpleTest() throws Exception {
 
-			Message<?> received = messageCollector.forChannel(source.output()).poll(10,
-					TimeUnit.SECONDS);
+			Message<?> received = this.messageCollector.forChannel(source.output()).poll(10, TimeUnit.SECONDS);
 			assertNotNull(received);
 			assertThat(received.getPayload(), Matchers.instanceOf(String.class));
 			assertEquals("foo\r\n", received.getPayload());
@@ -143,8 +150,7 @@ public abstract class MailSourceConfigurationTests {
 
 	}
 
-	@IntegrationTest({
-			"mail-url=pop3://user:pw@localhost:${test.mail.server.port}/INBOX" })
+	@IntegrationTest({ "mail-url=pop3://user:pw@localhost:${test.mail.server.port}/INBOX" })
 	public static class Pop3FailTests extends MailSourceConfigurationTests {
 
 		@BeforeClass
@@ -155,8 +161,7 @@ public abstract class MailSourceConfigurationTests {
 		@Test
 		public void testSimpleTest() throws Exception {
 
-			Message<?> received = messageCollector.forChannel(source.output()).poll(10,
-					TimeUnit.SECONDS);
+			Message<?> received = this.messageCollector.forChannel(source.output()).poll(10, TimeUnit.SECONDS);
 			assertNotNull(received);
 			assertThat(received.getPayload(), Matchers.instanceOf(String.class));
 			assertTrue(!received.getPayload().equals("Test Mail"));
@@ -164,9 +169,9 @@ public abstract class MailSourceConfigurationTests {
 
 	}
 
-	@IntegrationTest({ "idle-imap=true",
-			"mail-url=imap://user:pw@localhost:${test.mail.server.port}/INBOX" })
+	@IntegrationTest({ "idle-imap=true", "mail-url=imap://user:pw@localhost:${test.mail.server.port}/INBOX" })
 	public static class ImapIdlePassTests extends MailSourceConfigurationTests {
+
 		@BeforeClass
 		public static void startImapServer() throws Throwable {
 			startMailServer(PoorMansMailServer.imap(0));
@@ -175,8 +180,7 @@ public abstract class MailSourceConfigurationTests {
 		@Test
 		public void testSimpleTest() throws Exception {
 
-			Message<?> received = messageCollector.forChannel(source.output()).poll(10,
-					TimeUnit.SECONDS);
+			Message<?> received = this.messageCollector.forChannel(source.output()).poll(10, TimeUnit.SECONDS);
 			assertNotNull(received);
 			assertThat(received.getPayload(), Matchers.instanceOf(String.class));
 			assertEquals("foo\r\n", received.getPayload());
@@ -184,9 +188,9 @@ public abstract class MailSourceConfigurationTests {
 
 	}
 
-	@IntegrationTest({ "idle-imap=true",
-			"mail-url=imap://user:pw@localhost:${test.mail.server.port}/INBOX" })
+	@IntegrationTest({ "idle-imap=true", "mail-url=imap://user:pw@localhost:${test.mail.server.port}/INBOX" })
 	public static class ImapIdleFailTests extends MailSourceConfigurationTests {
+
 		@BeforeClass
 		public static void startImapServer() throws Throwable {
 			startMailServer(PoorMansMailServer.imap(0));
@@ -195,8 +199,7 @@ public abstract class MailSourceConfigurationTests {
 		@Test
 		public void testSimpleTest() throws Exception {
 
-			Message<?> received = messageCollector.forChannel(source.output()).poll(10,
-					TimeUnit.SECONDS);
+			Message<?> received = this.messageCollector.forChannel(source.output()).poll(10, TimeUnit.SECONDS);
 			assertNotNull(received);
 			assertThat(received.getPayload(), Matchers.instanceOf(String.class));
 			assertTrue(!received.getPayload().equals("Test Mail"));

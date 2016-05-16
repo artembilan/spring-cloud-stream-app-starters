@@ -13,10 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.springframework.cloud.stream.app.mail.source;
 
 import java.util.Properties;
 
+import javax.mail.URLName;
 import javax.validation.constraints.NotNull;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -25,15 +27,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * Configuration properties for the Mail Source module.
  *
  * @author Amol
+ * @author Artem Bilan
  */
 @ConfigurationProperties
 public class MailSourceProperties {
 
 	/**
 	 * Mail connection URL for connection to Mail server e.g.
-	 * 'imaps://username:password@imap.server.com:993/Inbox'
+	 * 'imaps://username:password@imap.server.com:993/Inbox'.
 	 */
-	private String mailUrl;
+	private URLName mailUrl;
 
 	/**
 	 * Set to true to mark email as read.
@@ -57,9 +60,14 @@ public class MailSourceProperties {
 	private Properties javaMailProperties = new Properties();
 
 	/**
-	 * Configure a SpEL expression to select messages
+	 * Configure a SpEL expression to select messages.
 	 */
 	private String expression = "true";
+
+	/**
+	 * The charset for byte[] mail-to-string transformation.
+	 */
+	private String charset = "UTF-8";
 
 	/**
 	 * @return the markAsRead
@@ -122,22 +130,23 @@ public class MailSourceProperties {
 	 * @return the mailUrl
 	 */
 	@NotNull
-	public String getMailUrl() {
-		return mailUrl;
+	public URLName getMailUrl() {
+		return this.mailUrl;
 	}
 
 	/**
 	 * @param mailUrl the mailUrl to set
 	 */
-	public void setMailUrl(String mailUrl) {
+	public void setMailUrl(URLName mailUrl) {
 		this.mailUrl = mailUrl;
 	}
 
 	/**
 	 * @return the expression
 	 */
+	@NotNull
 	public String getExpression() {
-		return expression;
+		return this.expression;
 	}
 
 	/**
@@ -145,6 +154,15 @@ public class MailSourceProperties {
 	 */
 	public void setExpression(String expression) {
 		this.expression = expression;
+	}
+
+	@NotNull
+	public String getCharset() {
+		return this.charset;
+	}
+
+	public void setCharset(String charset) {
+		this.charset = charset;
 	}
 
 }
